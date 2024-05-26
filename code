@@ -1,0 +1,16 @@
+echo "Ingrese el dominio de destino (ejemplo: testphp.vulnweb.com):"
+read DOMAIN
+
+echo "Escaneando el dominio $DOMAIN en busca de URLs..."
+waybackurls $DOMAIN | grep -E ".*\.js$|.*\.php$|.*\.html$|.*\.aspx$|.*\.jsp$" | grep -vE "(jpg|jpeg|gif|css|png|>
+
+echo "Detectando y filtrando posibles vulnerabilidades XSS..."
+cat /root/tools/xsssearch/urls.txt | gf xss | sort -u >/root/tools/xsssearch/potential_xss_urls.txt
+
+echo "Realizando análisis de las URLs potencialmente vulnerables..."
+while IFS= read -r line; do
+    echo "Probando la URL: $line"
+    curl -s -o /dev/null -w "%{url_effective}: %{http_code}\n" "$line"
+done < /root/tools/xsssearch/potential_xss_urls.txt > /root/tools/xsssearch/xss_scan_results.txt
+
+echo "Escaneo de XSS completo. Resultados guardados en xss_scan_results.txt"
