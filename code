@@ -1,16 +1,48 @@
+#!/bin/bash
+
+# Solicitar dominio al usuario
 echo "Ingrese el dominio de destino (ejemplo: testphp.vulnweb.com):"
 read DOMAIN
 
+# Validar que el dominio no esté vacío
+if [ -z "$DOMAIN" ]; then
+  echo "Error: El dominio no puede estar vacío."
+  exit 1
+fi
+
+# Escanear el dominio en busca de URLs específicas
 echo "Escaneando el dominio $DOMAIN en busca de URLs..."
-waybackurls $DOMAIN | grep -E ".*\.js$|.*\.php$|.*\.html$|.*\.aspx$|.*\.jsp$" | grep -vE "(jpg|jpeg|gif|css|png|>
+waybackurls "$DOMAIN" | grep -E ".*\.(js|php|html|aspx|jsp)$" | grep -vE "(jpg|jpeg|gif|css|png)" > /home/kali/tools/xsssearch/urls.txt
 
+# Verificar si se encontraron URLs
+if [ ! -s /home/kali/tools/xsssearch/urls.txt ]; then
+  echo "No se encontraron URLs relevantes."
+  exit 1
+fi
+
+# Detectar y filtrar posibles vulnerabilidades XSS
 echo "Detectando y filtrando posibles vulnerabilidades XSS..."
-cat /root/tools/xsssearch/urls.txt | gf xss | sort -u >/root/tools/xsssearch/potential_xss_urls.txt
+gf xss < /home/kali/tools/xsssearch/urls.txt | sort -u > /home/kali/tools/xsssearch/potential_xss_urls.txt
 
+# Verificar si se encontraron posibles URLs con XSS
+if [ ! -s /home/kali/tools/xsssearch/potential_xss_urls.txt ]; then
+  echo "No se encontraron URLs con potencial de XSS."
+  exit 1
+fi
+
+# Realizar análisis de las URLs potencialmente vulnerables
 echo "Realizando análisis de las URLs potencialmente vulnerables..."
-while IFS= read -r line; do
-    echo "Probando la URL: $line"
-    curl -s -o /dev/null -w "%{url_effective}: %{http_code}\n" "$line"
-done < /root/tools/xsssearch/potential_xss_urls.txt > /root/tools/xsssearch/xss_scan_results.txt
+while IFS= read -r url; do
+  echo "Probando la URL: $url"
+  # Agregar -I para obtener sólo los encabezados y verificar el código de estado
+  http_code=$(curl -s -I "$url" | grep -i "HTTP/" | awk '{print $2}')
+  echo "$url: $http_code"
+done < /home/kali/tools/xsssearch/potential_xss_urls.txt > /home/kali/tools/xsssearch/xss_scan_results.txt
 
-echo "Escaneo de XSS completo. Resultados guardados en xss_scan_results.txt"
+# Verificar si se obtuvieron resultados
+if [ -s /home/kali/tools/xsssearch/xss_scan_results.txt ]; then
+  echo "Escaneo de XSS completo. Resultados guardados en xss_scan_results.txt"
+else
+  echo "No se encontraron vulnerabilidades XSS."
+fi
+
